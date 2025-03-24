@@ -1,0 +1,81 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+    id        String   @id @default(uuid())
+    username  String   @unique
+    fullName  String
+    email     String   @unique
+    password  String
+    role      Role     @default(USER)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    Report    Report[]
+}
+
+enum Role {
+    USER
+    ADMIN
+}
+
+model Establishment {
+    id              String         @id @default(uuid())
+    name            String
+    address         String
+    phone           String
+    motorcycleSlots Int
+    carSlots        Int
+    createdAt       DateTime       @default(now())
+    updatedAt       DateTime       @updatedAt
+    ParkingEntry    ParkingEntry[]
+}
+
+model Vehicle {
+    id           String         @id @default(uuid())
+    brand        String
+    model        String
+    color        String
+    plate        String         @unique
+    type         VehicleType
+    createdAt    DateTime       @default(now())
+    updatedAt    DateTime       @updatedAt
+    ParkingEntry ParkingEntry[]
+}
+
+enum VehicleType {
+    CAR
+    MOTORCYCLE
+}
+
+model ParkingEntry {
+    id              String        @id @default(uuid())
+    vehicleId       String
+    vehicle         Vehicle       @relation(fields: [vehicleId], references: [id])
+    establishmentId String
+    establishment   Establishment @relation(fields: [establishmentId], references: [id])
+    entryTime       DateTime      @default(now())
+    exitTime        DateTime?
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+}
+
+model Report {
+    id        String     @id @default(uuid())
+    type      ReportType
+    data      Json
+    createdBy String
+    user      User       @relation(fields: [createdBy], references: [id])
+    createdAt DateTime   @default(now())
+    updatedAt DateTime   @updatedAt
+}
+
+enum ReportType {
+    ENTRY_EXIT_SUMMARY
+    HOURLY_SUMMARY
+}
