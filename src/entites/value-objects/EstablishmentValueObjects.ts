@@ -9,7 +9,7 @@ export class Phone {
   }
 
   private isValidPhone(phone: string): boolean {
-    const phoneRegex = /^\(\d{2}\) \d{4,5}-\d{4}$/;
+    const phoneRegex = /^(\+244|00244)\d{9}$/;
     return phoneRegex.test(phone);
   }
 

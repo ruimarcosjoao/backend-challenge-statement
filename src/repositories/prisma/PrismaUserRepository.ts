@@ -82,4 +82,9 @@ export class PrismaUserRepository
       prismaUser.role as Role
     );
   }
+
+  async count(): Promise<number> {
+    const prismaUsers = await this.prisma.user.count();
+    return prismaUsers;
+  }
 }

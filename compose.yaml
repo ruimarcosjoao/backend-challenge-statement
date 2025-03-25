@@ -1,0 +1,29 @@
+services:
+  # server:
+  #   build:
+  #     context: .
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: 4000
+
+  #   ports:
+  #     - 4000:4000
+  postgres:
+    image: bitnami/postgresql:16
+    container_name: statement_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: statement
+      POSTGRES_PASSWORD: statement
+      POSTGRES_DB: statement
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  db-data:
+secrets:
+  db-password:
+    file: db/password.txt

@@ -88,7 +88,7 @@ export class PrismaEstablishmentRepository
   }
 
   async findByPhone(phone: Phone): Promise<Establishment | null> {
-    const prismaEstablishment = await this.prisma.establishment.findUnique({
+    const prismaEstablishment = await this.prisma.establishment.findFirst({
       where: { phone: phone.toString() },
     });
 
@@ -100,8 +100,8 @@ export class PrismaEstablishmentRepository
       prismaEstablishment.name,
       prismaEstablishment.address,
       prismaEstablishment.phone,
-      parseInt(prismaEstablishment.motorcycleSlots),
-      parseInt(prismaEstablishment.carSlots)
+      prismaEstablishment.motorcycleSlots,
+      prismaEstablishment.carSlots
     );
   }
 }

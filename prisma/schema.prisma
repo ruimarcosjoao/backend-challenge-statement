@@ -1,5 +1,6 @@
 generator client {
     provider = "prisma-client-js"
+    output   = "../src/lib/prisma_client"
 }
 
 datasource db {
@@ -59,6 +60,7 @@ model ParkingEntry {
     vehicle         Vehicle       @relation(fields: [vehicleId], references: [id])
     establishmentId String
     establishment   Establishment @relation(fields: [establishmentId], references: [id])
+    isParked        Boolean       @default(false)
     entryTime       DateTime      @default(now())
     exitTime        DateTime?
     createdAt       DateTime      @default(now())

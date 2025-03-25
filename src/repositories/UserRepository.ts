@@ -5,6 +5,7 @@ import { IRepository } from "./IRepository";
 export interface IUserRepository extends IRepository<User> {
   findByEmail(email: Email): Promise<User | null>;
   findByUsername(username: Username): Promise<User | null>;
+  count(): Promise<number>;
 }
 
 export class UserRepository implements IUserRepository {
@@ -58,5 +59,9 @@ export class UserRepository implements IUserRepository {
         (user) => user.username.toString() === username.toString()
       ) || null
     );
+  }
+
+  async count(): Promise<number> {
+    return this.users.length;
   }
 }
