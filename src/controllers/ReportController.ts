@@ -1,36 +1,18 @@
+import { Prisma } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { PrismaClient } from "../lib/prisma_client";
 import { authAdminMiddleware } from "../middlewares/authMiddleware";
+import { formatCurrency, formatDuration } from "../utils/formatters";
 
 const prisma = new PrismaClient();
 
 // Taxas de cobrança por hora (em reais)
 const RATES = {
-  CAR: 100,
-  MOTORCYCLE: 50,
+  CAR: 150,
+  MOTORCYCLE: 75,
 } as const;
-
-// Função auxiliar para formatar valores monetários
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("pt-PT", {
-    style: "currency",
-    currency: "AOA",
-  }).format(value);
-};
-
-// Função auxiliar para formatar tempo
-const formatDuration = (milliseconds: number) => {
-  const hours = Math.floor(milliseconds / (1000 * 60 * 60));
-  const minutes = Math.floor((milliseconds % (1000 * 60 * 60)) / (1000 * 60));
-
-  return {
-    hours,
-    minutes,
-    formatted: `${hours}h ${minutes}min`,
-  };
-};
 
 export class ReportController {
   constructor() {}
@@ -577,7 +559,7 @@ export class ReportController {
           establishmentId,
           vehicle: {
             type: "CAR",
-          },
+          } satisfies Prisma.VehicleWhereInput,
           ...(startDate &&
             endDate && {
               entryTime: {
