@@ -11,6 +11,7 @@ import { env } from "../../config/env";
 import { AuthController } from "../../controllers/AuthController";
 import { EstablishmentController } from "../../controllers/EstablishementController";
 import { ParkingController } from "../../controllers/ParkingController";
+import { ReportController } from "../../controllers/ReportController";
 import { VehicleController } from "../../controllers/VehicleController";
 import { errorHandler } from "../../middlewares/errorHandler";
 
@@ -94,6 +95,8 @@ const vehicleController = new VehicleController();
 fastify.register(vehicleController.register, { prefix: "/vehicle" });
 const parkingController = new ParkingController();
 fastify.register(parkingController.register, { prefix: "/parking" });
+const reportController = new ReportController();
+fastify.register(reportController.register, { prefix: "/reports" });
 const authController = new AuthController(fastify);
 fastify.register(authController.register, { prefix: "/auth" });
 

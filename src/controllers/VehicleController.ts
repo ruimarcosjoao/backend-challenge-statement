@@ -16,31 +16,58 @@ export class VehicleController {
           summary: "Listar todos os veículos",
           tags: ["Vehicles"],
           security: [{ bearerAuth: [] }],
+          querystring: z.object({
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(100).default(10),
+          }),
           response: {
-            200: z.array(
-              z.object({
-                id: z.string().uuid(),
-                plate: z.string(),
-                type: z.enum(["CAR", "MOTORCYCLE"]),
-                brand: z.string(),
-                model: z.string(),
-                color: z.string(),
-                createdAt: z.date(),
-                updatedAt: z.date(),
-              })
-            ),
+            200: z.object({
+              data: z.array(
+                z.object({
+                  id: z.string().uuid(),
+                  plate: z.string(),
+                  type: z.enum(["CAR", "MOTORCYCLE"]),
+                  brand: z.string(),
+                  model: z.string(),
+                  color: z.string(),
+                  createdAt: z.date(),
+                  updatedAt: z.date(),
+                })
+              ),
+              pagination: z.object({
+                total: z.number(),
+                page: z.number(),
+                limit: z.number(),
+                totalPages: z.number(),
+              }),
+            }),
           },
         },
         preHandler: authMiddleware,
       },
       async (request, reply) => {
-        const vehicles = await prisma.vehicle.findMany({
-          orderBy: {
-            createdAt: "desc",
+        const { page, limit } = request.query;
+
+        const [vehicles, total] = await Promise.all([
+          prisma.vehicle.findMany({
+            orderBy: {
+              createdAt: "desc",
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.vehicle.count(),
+        ]);
+
+        return reply.status(200).send({
+          data: vehicles,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
           },
         });
-
-        return reply.status(200).send(vehicles);
       }
     );
 
@@ -120,7 +147,6 @@ export class VehicleController {
       }
     );
 
-    
     fastify.withTypeProvider<ZodTypeProvider>().put(
       "/:id",
       {
@@ -186,7 +212,6 @@ export class VehicleController {
         const { id } = request.params;
         const updateData = request.body;
 
-       
         const vehicle = await prisma.vehicle.findUnique({
           where: { id },
         });
@@ -197,7 +222,6 @@ export class VehicleController {
           });
         }
 
-       
         if (updateData.plate && updateData.plate !== vehicle.plate) {
           const existingVehicle = await prisma.vehicle.findUnique({
             where: { plate: updateData.plate },
@@ -219,7 +243,6 @@ export class VehicleController {
       }
     );
 
-   
     fastify.withTypeProvider<ZodTypeProvider>().delete(
       "/:id",
       {
@@ -263,7 +286,6 @@ export class VehicleController {
           });
         }
 
-        
         if (vehicle.ParkingEntry.length > 0) {
           return reply.status(400).send({
             message: "Não é possível deletar um veículo que está estacionado",

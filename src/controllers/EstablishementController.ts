@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { PrismaClient } from "../lib/prisma_client";
-import { authMiddleware } from "../middlewares/authMiddleware";
+import { authAdminMiddleware } from "../middlewares/authMiddleware";
 const prisma = new PrismaClient();
 
 export class EstablishmentController {
@@ -16,31 +16,57 @@ export class EstablishmentController {
           summary: "Listar todos os estabelecimentos",
           tags: ["Establishments"],
           security: [{ bearerAuth: [] }],
+          querystring: z.object({
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(100).default(10),
+          }),
           response: {
-            200: z.array(
-              z.object({
-                id: z.string().uuid(),
-                name: z.string(),
-                address: z.string(),
-                phone: z.string(),
-                motorcycleSlots: z.number(),
-                carSlots: z.number(),
-                createdAt: z.date(),
-                updatedAt: z.date(),
-              })
-            ),
+            200: z.object({
+              data: z.array(
+                z.object({
+                  id: z.string().uuid(),
+                  name: z.string(),
+                  address: z.string(),
+                  phone: z.string(),
+                  motorcycleSlots: z.number(),
+                  carSlots: z.number(),
+                  createdAt: z.date(),
+                  updatedAt: z.date(),
+                })
+              ),
+              pagination: z.object({
+                total: z.number(),
+                page: z.number(),
+                limit: z.number(),
+                totalPages: z.number(),
+              }),
+            }),
           },
         },
-        preHandler: authMiddleware,
       },
       async (request, reply) => {
-        const establishments = await prisma.establishment.findMany({
-          orderBy: {
-            createdAt: "desc",
+        const { page, limit } = request.query;
+
+        const [establishments, total] = await Promise.all([
+          prisma.establishment.findMany({
+            orderBy: {
+              createdAt: "desc",
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.establishment.count(),
+        ]);
+
+        return reply.status(200).send({
+          data: establishments,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
           },
         });
-
-        return reply.status(200).send(establishments);
       }
     );
 
@@ -63,10 +89,10 @@ export class EstablishmentController {
             phone: z
               .string()
               .regex(
-                /^\+\d{11}$/,
-                "O telefone deve seguir o padrão +24494732154"
+                /^\+244\d{9}$/,
+                "O telefone deve seguir o padrão +244XXXXXXXXX (9 dígitos após o código do país)"
               )
-              .describe("Número de telefone no formato +24494732154"),
+              .describe("Número de telefone no formato +244947321534"),
             motorcycleSlots: z
               .number()
               .min(1, "O número de vagas para motos deve ser maior que 0")
@@ -82,6 +108,7 @@ export class EstablishmentController {
             }),
           },
         },
+        preHandler: authAdminMiddleware,
       },
       async (request, reply) => {
         const { name, address, phone, motorcycleSlots, carSlots } =
@@ -145,6 +172,7 @@ export class EstablishmentController {
             }),
           },
         },
+        preHandler: authAdminMiddleware,
       },
       async (request, reply) => {
         const { id } = request.params;
@@ -186,6 +214,7 @@ export class EstablishmentController {
             }),
           },
         },
+        preHandler: authAdminMiddleware,
       },
       async (request, reply) => {
         const { id } = request.params;

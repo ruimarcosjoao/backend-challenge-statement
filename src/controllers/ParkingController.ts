@@ -14,59 +14,53 @@ export class ParkingController {
       "/",
       {
         schema: {
-          summary: "Listar todos os registros de estacionamento com filtros",
+          summary: "Listar todos os registros de estacionamento",
           tags: ["Parking"],
           security: [{ bearerAuth: [] }],
           querystring: z.object({
             vehicleType: z.enum(["CAR", "MOTORCYCLE"]).optional(),
             establishmentId: z.string().uuid().optional(),
+            plate: z.string().optional(),
             startDate: z.string().datetime().optional(),
             endDate: z.string().datetime().optional(),
-            isParked: z
-              .union([
-                z.boolean(),
-                z.string().transform((val) => val === "true"),
-              ])
-              .optional(),
-            orderBy: z.enum(["entryTime", "exitTime", "createdAt"]).optional(),
-            orderDirection: z.enum(["asc", "desc"]).optional(),
-            plate: z
-              .string()
-              .regex(/^[A-Z]{2,3}-[0-9]{2}-[0-9]{2}(?:-[A-Z]{2})?$/i)
-              .optional(),
+            isParked: z.boolean().optional(),
+            orderBy: z
+              .enum(["entryTime", "exitTime", "createdAt"])
+              .default("entryTime"),
+            orderDirection: z.enum(["asc", "desc"]).default("desc"),
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(100).default(10),
           }),
           response: {
-            200: z.array(
-              z.object({
-                id: z.string().uuid(),
-                vehicleId: z.string().uuid(),
-                establishmentId: z.string().uuid(),
-                entryTime: z.date(),
-                exitTime: z.date().nullable(),
-                createdAt: z.date(),
-                updatedAt: z.date(),
-                vehicle: z.object({
+            200: z.object({
+              data: z.array(
+                z.object({
                   id: z.string().uuid(),
-                  plate: z.string(),
-                  type: z.enum(["CAR", "MOTORCYCLE"]),
-                  brand: z.string(),
-                  model: z.string(),
-                  color: z.string(),
-                  createdAt: z.date(),
-                  updatedAt: z.date(),
-                }),
-                establishment: z.object({
-                  id: z.string().uuid(),
-                  name: z.string(),
-                  address: z.string(),
-                  phone: z.string(),
-                  motorcycleSlots: z.number(),
-                  carSlots: z.number(),
-                  createdAt: z.date(),
-                  updatedAt: z.date(),
-                }),
-              })
-            ),
+                  vehicleId: z.string().uuid(),
+                  establishmentId: z.string().uuid(),
+                  entryTime: z.date(),
+                  exitTime: z.date().nullable(),
+                  isParked: z.boolean(),
+                  vehicle: z.object({
+                    plate: z.string(),
+                    type: z.enum(["CAR", "MOTORCYCLE"]),
+                    brand: z.string(),
+                    model: z.string(),
+                    color: z.string(),
+                  }),
+                  establishment: z.object({
+                    name: z.string(),
+                    address: z.string(),
+                  }),
+                })
+              ),
+              pagination: z.object({
+                total: z.number(),
+                page: z.number(),
+                limit: z.number(),
+                totalPages: z.number(),
+              }),
+            }),
           },
         },
         preHandler: authMiddleware,
@@ -75,62 +69,68 @@ export class ParkingController {
         const {
           vehicleType,
           establishmentId,
+          plate,
           startDate,
           endDate,
           isParked,
-          orderBy = "createdAt",
-          orderDirection = "desc",
-          plate,
+          orderBy,
+          orderDirection,
+          page,
+          limit,
         } = request.query;
 
-        const where: any = {};
-
-        if (vehicleType) {
-          where.vehicle = {
-            type: vehicleType,
-          };
-        }
-
-        if (plate) {
-          where.vehicle = {
-            ...where.vehicle,
-            plate: {
-              contains: plate,
-              mode: "insensitive",
+        const where = {
+          ...(establishmentId && { establishmentId }),
+          ...(vehicleType && {
+            vehicle: {
+              type: vehicleType,
             },
-          };
-        }
+          }),
+          ...(plate && {
+            vehicle: {
+              plate: {
+                contains: plate,
+                mode: "insensitive",
+              },
+            },
+          }),
+          ...(startDate &&
+            endDate && {
+              entryTime: {
+                gte: new Date(startDate),
+                lte: new Date(endDate),
+              },
+            }),
+          ...(isParked !== undefined && {
+            exitTime: isParked ? null : { not: null },
+          }),
+        };
 
-        if (establishmentId) {
-          where.establishmentId = establishmentId;
-        }
+        const [parkingEntries, total] = await Promise.all([
+          prisma.parkingEntry.findMany({
+            where,
+            include: {
+              vehicle: true,
+              establishment: true,
+            },
+            orderBy: {
+              [orderBy]: orderDirection,
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.parkingEntry.count({ where }),
+        ]);
 
-        if (startDate || endDate) {
-          where.entryTime = {};
-          if (startDate) {
-            where.entryTime.gte = new Date(startDate);
-          }
-          if (endDate) {
-            where.entryTime.lte = new Date(endDate);
-          }
-        }
-
-        if (isParked !== undefined) {
-          where.exitTime = isParked ? null : { not: null };
-        }
-
-        const parkings = await prisma.parkingEntry.findMany({
-          where,
-          include: {
-            vehicle: true,
-            establishment: true,
-          },
-          orderBy: {
-            [orderBy]: orderDirection,
+        return reply.status(200).send({
+          data: parkingEntries,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
           },
         });
-
-        return reply.status(200).send(parkings);
       }
     );
 
@@ -206,7 +206,7 @@ export class ParkingController {
       "/establishment/:establishmentId/parked",
       {
         schema: {
-          summary: "Listar veículos estacionados em um estabelecimento",
+          summary: "Listar veículos estacionados por estabelecimento",
           tags: ["Parking"],
           security: [{ bearerAuth: [] }],
           params: z.object({
@@ -214,31 +214,34 @@ export class ParkingController {
           }),
           querystring: z.object({
             vehicleType: z.enum(["CAR", "MOTORCYCLE"]).optional(),
-            orderBy: z.enum(["entryTime", "plate"]).optional(),
-            orderDirection: z.enum(["asc", "desc"]).optional(),
-            plate: z
-              .string()
-              .regex(/^[A-Z]{2,3}-[0-9]{2}-[0-9]{2}(?:-[A-Z]{2})?$/i)
-              .optional(),
+            plate: z.string().optional(),
+            orderBy: z.enum(["entryTime", "createdAt"]).default("entryTime"),
+            orderDirection: z.enum(["asc", "desc"]).default("desc"),
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(100).default(10),
           }),
           response: {
-            200: z.array(
-              z.object({
-                id: z.string().uuid(),
-                vehicleId: z.string().uuid(),
-                entryTime: z.date(),
-                vehicle: z.object({
+            200: z.object({
+              data: z.array(
+                z.object({
                   id: z.string().uuid(),
-                  plate: z.string(),
-                  type: z.enum(["CAR", "MOTORCYCLE"]),
-                  brand: z.string(),
-                  model: z.string(),
-                  color: z.string(),
-                }),
-              })
-            ),
-            404: z.object({
-              message: z.string(),
+                  vehicleId: z.string().uuid(),
+                  entryTime: z.date(),
+                  vehicle: z.object({
+                    plate: z.string(),
+                    type: z.enum(["CAR", "MOTORCYCLE"]),
+                    brand: z.string(),
+                    model: z.string(),
+                    color: z.string(),
+                  }),
+                })
+              ),
+              pagination: z.object({
+                total: z.number(),
+                page: z.number(),
+                limit: z.number(),
+                totalPages: z.number(),
+              }),
             }),
           },
         },
@@ -246,55 +249,51 @@ export class ParkingController {
       },
       async (request, reply) => {
         const { establishmentId } = request.params;
-        const {
-          vehicleType,
-          orderBy = "entryTime",
-          orderDirection = "desc",
-          plate,
-        } = request.query;
+        const { vehicleType, plate, orderBy, orderDirection, page, limit } =
+          request.query;
 
-        const establishment = await prisma.establishment.findUnique({
-          where: { id: establishmentId },
-        });
-
-        if (!establishment) {
-          return reply.status(404).send({
-            message: "Estabelecimento não encontrado",
-          });
-        }
-
-        const where: any = {
+        const where = {
           establishmentId,
           exitTime: null,
+          ...(vehicleType && {
+            vehicle: {
+              type: vehicleType,
+            },
+          }),
+          ...(plate && {
+            vehicle: {
+              plate: {
+                contains: plate,
+                mode: "insensitive",
+              },
+            },
+          }),
         };
 
-        if (vehicleType) {
-          where.vehicle = {
-            type: vehicleType,
-          };
-        }
-
-        if (plate) {
-          where.vehicle = {
-            ...where.vehicle,
-            plate: {
-              contains: plate,
-              mode: "insensitive",
+        const [parkingEntries, total] = await Promise.all([
+          prisma.parkingEntry.findMany({
+            where,
+            include: {
+              vehicle: true,
             },
-          };
-        }
+            orderBy: {
+              [orderBy]: orderDirection,
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.parkingEntry.count({ where }),
+        ]);
 
-        const parkings = await prisma.parkingEntry.findMany({
-          where,
-          include: {
-            vehicle: true,
-          },
-          orderBy: {
-            [orderBy]: orderDirection,
+        return reply.status(200).send({
+          data: parkingEntries,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
           },
         });
-
-        return reply.status(200).send(parkings);
       }
     );
 
@@ -324,7 +323,8 @@ export class ParkingController {
               .datetime(
                 "Data de entrada inválida. Use o formato ISO 8601 (exemplo: 2024-03-20T10:00:00Z)"
               )
-              .describe("Data e hora de entrada no formato ISO 8601"),
+              .describe("Data e hora de entrada no formato ISO 8601")
+              .optional(),
             exitDate: z
               .string()
               .datetime(
@@ -418,7 +418,7 @@ export class ParkingController {
         }
 
         // Valida datas
-        const entryDateTime = new Date(entryDate);
+        const entryDateTime = new Date(entryDate ? entryDate : new Date());
         const exitDateTime = exitDate ? new Date(exitDate) : null;
 
         if (exitDateTime && entryDateTime >= exitDateTime) {
@@ -639,7 +639,8 @@ export class ParkingController {
               .datetime(
                 "Data de saída inválida. Use o formato ISO 8601 (exemplo: 2024-03-20T10:00:00Z)"
               )
-              .describe("Data e hora de saída no formato ISO 8601"),
+              .describe("Data e hora de saída no formato ISO 8601")
+              .optional(),
           }),
           response: {
             200: z.object({
@@ -683,7 +684,7 @@ export class ParkingController {
           });
         }
 
-        const exitDateTime = new Date(exitDate);
+        const exitDateTime = new Date(exitDate ? exitDate : new Date());
         if (parkingEntry.entryTime >= exitDateTime) {
           return reply.status(400).send({
             message: "A data de saída deve ser posterior à data de entrada",
