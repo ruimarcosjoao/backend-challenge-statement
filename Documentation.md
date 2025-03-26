@@ -89,23 +89,41 @@ http://localhost:3000/reference
 - `POST /auth/login` - Login de usuário
 
 ### Estabelecimentos
-- `GET /establishment` - Listar estabelecimentos
+- `GET /establishment` - Listar estabelecimentos (com paginação)
 - `POST /establishment/create` - Criar estabelecimento
 - `PUT /establishment/:id` - Atualizar estabelecimento
 - `DELETE /establishment/:id` - Deletar estabelecimento
 
 ### Veículos
-- `GET /vehicle` - Listar veículos
+- `GET /vehicle` - Listar veículos (com paginação)
 - `POST /vehicle/create` - Cadastrar veículo
 - `PUT /vehicle/:id` - Atualizar veículo
 - `DELETE /vehicle/:id` - Deletar veículo
 
 ### Estacionamento
-- `GET /parking` - Listar registros de estacionamento
+- `GET /parking` - Listar registros de estacionamento (com paginação)
 - `POST /parking/entry` - Registrar entrada de veículo
 - `POST /parking/entry-with-registration` - Cadastrar veículo e registrar entrada
 - `PUT /parking/:id/exit` - Registrar saída de veículo
 - `GET /parking/establishment/:establishmentId/parked` - Listar veículos estacionados por estabelecimento
+
+### Relatórios
+- `GET /reports/occupation` - Relatório de ocupação por estabelecimento
+  - Parâmetros opcionais: establishmentId, startDate, endDate, page, limit
+  - Retorna taxa de ocupação, vagas disponíveis e estatísticas por tipo de veículo
+
+- `GET /reports/revenue` - Relatório de faturamento por período
+  - Parâmetros obrigatórios: startDate, endDate
+  - Parâmetros opcionais: establishmentId
+  - Retorna faturamento total, médias e detalhamento por tipo de veículo e estabelecimento
+
+- `GET /reports/frequent-vehicles` - Relatório de veículos mais frequentes
+  - Parâmetros opcionais: establishmentId, startDate, endDate, page, limit
+  - Retorna lista de veículos ordenada por número de visitas
+
+- `GET /reports/frequent-cars/:establishmentId` - Relatório de carros mais frequentes por estabelecimento
+  - Parâmetros opcionais: startDate, endDate, page, limit
+  - Retorna lista de carros com estatísticas detalhadas de visitas e gastos
 
 ## 🧪 Exemplos de Uso
 
@@ -193,6 +211,16 @@ PUT /vehicle/123e4567-e89b-12d3-a456-426614174000
 GET /parking?vehicleType=CAR&isParked=true&establishmentId=123e4567-e89b-12d3-a456-426614174000
 ```
 
+### 10. Relatório de Faturamento
+```http
+GET /reports/revenue?startDate=2024-03-01T00:00:00Z&endDate=2024-03-31T23:59:59Z
+```
+
+### 11. Relatório de Carros Frequentes
+```http
+GET /reports/frequent-cars/123e4567-e89b-12d3-a456-426614174000?page=1&limit=10
+```
+
 ## 📝 Notas Adicionais
 
 - Todas as rotas (exceto login) requerem autenticação via JWT
@@ -201,3 +229,7 @@ GET /parking?vehicleType=CAR&isParked=true&establishmentId=123e4567-e89b-12d3-a4
 - As placas devem seguir o formato AAA-99-99, AA-99-99-AA ou AAA-99-99-AA
 - Não é possível deletar veículos que estão estacionados
 - O sistema controla automaticamente a disponibilidade de vagas
+- Todas as rotas de listagem incluem paginação (page e limit)
+- Os relatórios administrativos requerem permissão de ADMIN
+- Valores monetários são retornados em AOA (Kwanza)
+- Taxas de cobrança: Carros - 150 AOA/hora, Motos - 75 AOA/hora
